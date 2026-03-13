@@ -68,7 +68,7 @@ def log_features(
     for idx, (image_name, bgr) in enumerate(
         tqdm(bgr_dict.items(), desc="Logging keypoints")
     ):
-        rr.set_time_sequence("features", idx)
+        rr.set_time("features", sequence=idx)
         cam_log_path: str = (
             "camera" if matching_method == "sequential" else f"{image_name}"
         )
@@ -110,7 +110,7 @@ def log_matches(
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
             continue
-        rr.set_time_sequence("matches", idx)
+        rr.set_time("matches", sequence=idx)
         # load matches
         matches, scores = get_matches(matches_path, name0, name1)
 
@@ -314,9 +314,24 @@ def run_hloc_reconstruction(
         database = sfm_dir / "database.db"
 
         create_empty_db(database)
-        import_images(
-            image_dir, database, camera_mode, image_list=None, options=image_options
-        )
+        # `pycolmap.import_images` changed from `image_list` to `image_names` in
+        # newer bindings. Call the binding directly so this works across versions.
+        try:
+            pycolmap.import_images(
+                str(database),
+                str(image_dir),
+                camera_mode,
+                image_names=[],
+                options=image_options,
+            )
+        except TypeError:
+            pycolmap.import_images(
+                str(database),
+                str(image_dir),
+                camera_mode,
+                image_list=[],
+                options=image_options,
+            )
         image_ids: dict[str, int] = get_image_ids(database)
 
         with timing_logger.log_time("log matches"):
@@ -370,8 +385,13 @@ def run_hloc_reconstruction(
             output_dir=colmap_dir.parent,
         )
         rr.reset_time()  # Clears all set timeline info.
-        read_and_log_sparse_reconstruction(
-            model_path=sfm_dir, filter_output=False, resize=None, extention=".bin"
-        )
+        try:
+            read_and_log_sparse_reconstruction(
+                model_path=sfm_dir, filter_output=False, resize=None, extention=".bin"
+            )
+        except AttributeError as exc:
+            CONSOLE.log(
+                f"[yellow]Skipping sparse reconstruction Rerun logging due to SDK API mismatch:[/] {exc}"
+            )
 
         CONSOLE.log(f"[bold green]:tada: Done {colmap_cmd} bundle adjustment.")

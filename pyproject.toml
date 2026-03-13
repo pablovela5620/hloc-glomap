@@ -12,8 +12,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["hloc_glomap*"]
 
-[tool.pixi.project]
-channels = ["nvidia", "nvidia/label/cuda-11.8.0", "conda-forge", "pytorch"]
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.activation]
@@ -21,31 +21,14 @@ scripts = [".pixi.sh"]
 
 [tool.pixi.system-requirements]
 libc = { family = "glibc", version = "2.31" }
-cuda = "11.8"
 
-[tool.pixi.pypi-dependencies]
-rerun-loader-colmap = { git = "https://github.com/pablovela5620/rerun-loader-colmap.git" }
-hloc = { git = "https://github.com/pablovela5620/Hierarchical-Localization.git", rev = "56ac6a132d5d4983ffb12049652d6d1f2cee8553" }
-hloc-glomap = { path = ".", editable = true }
-gradio_rerun = { url = "https://huggingface.co/datasets/pablovela5620/gradio-rerun-0.0.9/resolve/main/gradio_rerun-0.0.9-py3-none-any.whl" }
-
-
-[tool.pixi.dependencies]
+[tool.pixi.feature.common.dependencies]
 python = "3.11.*"
-pytorch = { version = "2.3.1", channel = "pytorch" }
-torchvision = { version = "0.18.1", channel = "pytorch" }
-cuda = { version = "*", channel = "nvidia/label/cuda-11.8.0" }
-cuda-nvcc = { version = "*", channel = "nvidia/label/cuda-11.8.0" }
-pytorch-cuda = { version = "11.8.*", channel = "pytorch" }
-cudatoolkit = { version = "11.8.*", channel = "conda-forge" }
 icecream = ">=2.1.3,<3"
 rich = ">=13.8.1,<14"
 appdirs = ">=1.4.4,<2"
 tyro = ">=0.9.1,<0.10"
-gradio = ">=4.44.0,<5"
-pip = ">=24.2,<25"
-numpy = "<2"
-rerun-sdk = ">=0.20.0,<0.21"
+numpy = ">=1.26,<3"
 jaxtyping = ">=0.2.34,<0.3"
 cmake = ">=3.30.5,<4"
 make = ">=4.4.1,<5"
@@ -55,26 +38,58 @@ libgomp = ">=14.2.0,<15"
 eigen = ">=3.4.0,<4"
 libblas = ">=3.9.0,<4"
 libcblas = ">=3.9.0,<4"
-suitesparse = ">=7.8.3,<8"
-ceres-solver = ">=2.2.0,<3"
+suitesparse = "==7.8.3"
+ceres-solver = { version = "==2.2.0", build = "ha77e7a2_4" }
 libboost-devel = ">=1.86.0,<2"
 glog = ">=0.7.1,<0.8"
 cgal-cpp = ">=6.0.1,<7"
 freeimage = ">=3.18.0,<4"
+flann = ">=1.9.2,<2"
+glew = ">=2.3.0,<3"
+libgl-devel = ">=1.7.0,<2"
+libopengl-devel = ">=1.7.0,<2"
+qt-main = ">=5.15.15,<6"
 sqlite = ">=3.47.0,<4"
 gflags = ">=2.2.2,<3"
 wget = ">=1.21.4,<2"
 unzip = ">=6.0,<7"
 
+[tool.pixi.feature.common.pypi-dependencies]
+hloc = { git = "https://github.com/pablovela5620/Hierarchical-Localization.git", rev = "56ac6a132d5d4983ffb12049652d6d1f2cee8553" }
+hloc-glomap = { path = ".", editable = true }
+
+[tool.pixi.feature.ui.dependencies]
+numpy = ">=2,<3"
+
+[tool.pixi.feature.ui.pypi-dependencies]
+gradio = "==6.9.0"
+gradio-rerun = "==0.29.2"
+rerun-sdk = "==0.29.2"
+rerun-loader-colmap = { git = "https://github.com/pablovela5620/rerun-loader-colmap.git" }
+
+[tool.pixi.feature.cuda.system-requirements]
+cuda = "12.8"
+
+[tool.pixi.feature.cuda.dependencies]
+cuda-version = "12.8.*"
+cuda-compiler = "*"
+cuda-cudart-dev = "*"
+cuda-crt = "*"
+cuda-cccl = "*"
+
+[tool.pixi.feature.cuda.pypi-dependencies]
+torch = { version = "==2.9.1", index = "https://download.pytorch.org/whl/cu128" }
+torchvision = { version = "==0.24.1", index = "https://download.pytorch.org/whl/cu128" }
+
 [tool.pixi.tasks]
-_make-third_party-dir = { cmd = "ls third_party || mkdir third_party" }
-_download_vocab_tree = "ls vocab_tree_flickr100K_words32K.bin || wget https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"
-post-install = { cmd = "glomap -h", depends_on = [
+_make-third_party-dir = "mkdir -p third_party"
+_download_vocab_tree = "test -e vocab_tree_flickr100K_words32K.bin || wget https://demuc.de/colmap/vocab_tree_flickr100K_words32K.bin"
+post-install = { cmd = "glomap -h", depends-on = [
     # "_hloc-install",
     "_download_vocab_tree",
     "_install-glomap",
 ] }
-app = { cmd = "python tools/app.py", description = "Run the gradio app", depends_on = [
+app = { cmd = "python tools/app.py", description = "Run the gradio app", depends-on = [
     "post-install",
 ] }
 
@@ -86,8 +101,8 @@ test -e "glomap"
    )
 """
 cwd = "third_party"
-outputs = ["glomap"]
-depends_on = ["_make-third_party-dir"]
+outputs = ["third_party/glomap"]
+depends-on = ["_make-third_party-dir"]
 
 [tool.pixi.tasks._clean-glomap]
 cmd = "rm -rf build"
@@ -96,15 +111,16 @@ outputs = ["glomap"]
 
 [tool.pixi.tasks._prepare-glomap]
 cmd = """
-cmake -B build -S . -GNinja \
+cmake --fresh -B build -S . -GNinja \
     -DCMAKE_PREFIX_PATH=$CONDA_PREFIX \
     -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX \
     -DCMAKE_EXE_LINKER_FLAGS="-L$CONDA_PREFIX/lib" \
+    -DMARCH_NATIVE=OFF \
     -DCHOLMOD_LIBRARY=$CONDA_PREFIX/lib/libcholmod.so \
     -DCHOLMOD_INCLUDE_DIR=$CONDA_PREFIX/include/suitesparse
 """
 cwd = "third_party/glomap"
-depends_on = ["_clone-glomap", "_make-third_party-dir"]
+depends-on = ["_clone-glomap", "_make-third_party-dir"]
 
 [tool.pixi.tasks._install-glomap]
 cmd = "ninja -C build && ninja -C build install"
@@ -116,12 +132,7 @@ cmd = """
     time python tools/reconstruct.py
     """
 description = "Reconstruct the scene using LightGlue and Glomap."
-depends_on = ["post-install"]
-
-[tool.pixi.feature.nerfstudio.system-requirements]
-libc = { family = "glibc", version = "2.31" }
-cuda = "11.8"
-
+depends-on = ["post-install"]
 
 [tool.pixi.feature.nerfstudio.tasks.video-processing]
 cmd = """
@@ -130,33 +141,14 @@ cmd = """
 description = "Perform video processing on the dataset."
 
 [tool.pixi.feature.nerfstudio.tasks.train-splat]
-cmd = """
-    ns-train splatfacto --pipeline.model.use-bilateral-grid True --output-dir $DATA_DIR/outputs --max-num-iterations 7000 colmap --data $DATA_DIR
-    --colmap-path sparse/0/
-    """
+cmd = "bash tools/train_nerfstudio.sh glomap"
 description = "Train Splatfacto"
 
 [tool.pixi.feature.nerfstudio.tasks.train-colmap-splat]
-cmd = """
-    ns-train splatfacto \
-    --experiment-name $EXP_NAME \
-    --pipeline.model.use-bilateral-grid True \
-    --vis viewer+tensorboard \
-    --viewer.quit-on-train-completion True \
-    --output-dir $DATA_DIR/outputs \
-    --max-num-iterations 7000 \
-    colmap --data $DATA_DIR
-    --colmap-path $COLMAP_DIR
-    """
+cmd = "bash tools/train_nerfstudio.sh colmap"
 description = "Train Splatfacto using Colmap Data"
 
 [tool.pixi.feature.nerfstudio.dependencies]
-python = "3.11.*"
-pytorch = { version = "2.3.1", channel = "pytorch" }
-torchvision = { version = "0.18.1", channel = "pytorch" }
-cuda = { version = "*", channel = "nvidia/label/cuda-11.8.0" }
-cuda-nvcc = { version = "*", channel = "nvidia/label/cuda-11.8.0" }
-pytorch-cuda = { version = "11.8.*", channel = "pytorch" }
 numpy = "<2"
 
 [tool.pixi.feature.nerfstudio.pypi-dependencies]
@@ -166,5 +158,9 @@ nerfstudio = { git = "https://github.com/nerfstudio-project/nerfstudio.git", rev
 
 
 [tool.pixi.environments]
-# Create a custom environment which only has the `lint` feature (numpy isn't part of that env).
-nerfstudio = { features = ["nerfstudio"], no-default-feature = true }
+default = { features = ["common", "cuda", "ui"], solve-group = "default" }
+nerfstudio = { features = [
+    "common",
+    "cuda",
+    "nerfstudio",
+], solve-group = "nerfstudio" }

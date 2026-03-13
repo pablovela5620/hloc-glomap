@@ -5,4 +5,4 @@ with gr.Blocks() as demo:
     with gr.Tab(label="Process"):
         demo_block.render()
 
-demo.launch()
+demo.launch(ssr_mode=False)
